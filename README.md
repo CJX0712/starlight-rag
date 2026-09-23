@@ -1,5 +1,12 @@
 # StarLight-RAG
 
+<p align="center">
+  <a href="https://github.com/CJX0712/starlight-rag/actions/workflows/ci.yml"><img src="https://github.com/CJX0712/starlight-rag/actions/workflows/ci.yml/badge.svg" alt="ci"></a>
+  <a href="https://github.com/CJX0712/starlight-rag/releases"><img src="https://img.shields.io/github/v/release/CJX0712/starlight-rag?sort=semver" alt="release"></a>
+  <a href="https://github.com/CJX0712/starlight-rag/blob/master/LICENSE"><img src="https://img.shields.io/github/license/CJX0712/starlight-rag" alt="license"></a>
+  <img src="https://img.shields.io/badge/author-%E6%99%A8%E6%98%9F-1f6feb" alt="author">
+</p>
+
 端到端可运行的企业级 RAG（检索增强生成）知识库问答系统。
 
 作者：晨星 · 许可：MIT
