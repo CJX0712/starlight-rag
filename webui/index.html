@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StarLight-RAG 知识库问答</title>
+<style>
+  :root {
+    --primary: #4F46E5;
+    --primary-dark: #4338CA;
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --border: #E2E8F0;
+    --text: #0F172A;
+    --text-secondary: #64748B;
+    --success: #059669;
+    --radius: 12px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 32px; display: flex; align-items: center; gap: 12px; }
+  header svg { flex-shrink: 0; }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header .badge { font-size: 12px; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; }
+  main { flex: 1; max-width: 880px; width: 100%; margin: 0 auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 16px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+  .panel h2 { font-size: 15px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .panel h2 svg { color: var(--primary); }
+  textarea, input[type=text] { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 14px; font-family: inherit; resize: vertical; }
+  textarea:focus, input[type=text]:focus { outline: 2px solid var(--primary); outline-offset: -1px; border-color: var(--primary); }
+  button { background: var(--primary); color: #fff; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: background 0.15s ease; }
+  button:hover { background: var(--primary-dark); }
+  button:disabled { background: var(--border); cursor: not-allowed; }
+  button.ghost { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
+  button.ghost:hover { background: var(--bg); }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .doc-list { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .doc-item { display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 14px; }
+  .doc-item .meta { color: var(--text-secondary); font-size: 12px; margin-left: 8px; }
+  #chat { display: flex; flex-direction: column; gap: 12px; }
+  .msg { border-radius: var(--radius); padding: 14px 16px; font-size: 14px; line-height: 1.7; }
+  .msg.user { background: var(--primary); color: #fff; align-self: flex-end; max-width: 80%; }
+  .msg.bot { background: var(--surface); border: 1px solid var(--border); }
+  .msg.bot .sources { margin-top: 10px; border-top: 1px dashed var(--border); padding-top: 8px; font-size: 12px; color: var(--text-secondary); }
+  .msg.bot .sources span { display: inline-block; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; margin: 2px 4px 2px 0; }
+  .status { font-size: 12px; color: var(--success); }
+  footer { text-align: center; padding: 16px; font-size: 12px; color: var(--text-secondary); border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+<header>
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+  <h1>StarLight-RAG 知识库问答</h1>
+  <span class="badge" id="health">连接中…</span>
+</header>
+<main>
+  <section class="panel">
+    <h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>导入文档</h2>
+    <div class="row" style="margin-bottom:8px"><input type="text" id="docTitle" placeholder="文档标题"></div>
+    <textarea id="docContent" rows="4" placeholder="粘贴文档内容（txt / md 文本）…"></textarea>
+    <div class="row" style="margin-top:10px">
+      <button id="ingestBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        导入知识库
+      </button>
+      <span class="status" id="ingestStatus"></span>
+    </div>
+    <div class="doc-list" id="docList"></div>
+  </section>
+
+  <section class="panel">
+    <h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>问答</h2>
+    <div id="chat"></div>
+    <div class="row" style="margin-top:12px">
+      <input type="text" id="question" placeholder="向知识库提问…" style="flex:1">
+      <button id="askBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        发送
+      </button>
+    </div>
+  </section>
+</main>
+<footer>StarLight-RAG v0.1.0 · 作者：晨星 · 混合检索（BM25 + 向量）· RRF 融合 · 有界重排</footer>
+<script>
+const $ = id => document.getElementById(id);
+const api = (path, opts) => fetch(path, opts).then(async r => {
+  if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.detail || ('HTTP ' + r.status)); }
+  return r.status === 204 ? null : r.json();
+});
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+async function refreshHealth() {
+  try {
+    const h = await api('/health');
+    $('health').textContent = '服务正常 · ' + h.chunks + ' 个分块';
+  } catch { $('health').textContent = '服务不可用'; }
+}
+
+async function refreshDocs() {
+  const docs = await api('/api/v1/documents');
+  $('docList').innerHTML = docs.map(d =>
+    '<div class="doc-item"><div>' + esc(d.title) + '<span class="meta">' + d.chunks + ' 块 · ' + esc(d.doc_id) + '</span></div>' +
+    '<button class="ghost" onclick="removeDoc(\'' + d.doc_id + '\')">删除</button></div>'
+  ).join('') || '<div class="meta" style="color:var(--text-secondary);font-size:13px">知识库为空，请先导入文档。</div>';
+  refreshHealth();
+}
+
+async function removeDoc(docId) {
+  await api('/api/v1/documents/' + docId, { method: 'DELETE' });
+  refreshDocs();
+}
+
+$('ingestBtn').onclick = async () => {
+  const title = $('docTitle').value.trim(), content = $('docContent').value.trim();
+  if (!title || !content) { $('ingestStatus').textContent = '请填写标题与内容'; return; }
+  $('ingestBtn').disabled = true;
+  try {
+    const r = await api('/api/v1/documents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, content }) });
+    $('ingestStatus').textContent = '已导入：' + r.chunks + ' 个分块';
+    $('docTitle').value = ''; $('docContent').value = '';
+    refreshDocs();
+  } catch (e) { $('ingestStatus').textContent = '导入失败：' + e.message; }
+  $('ingestBtn').disabled = false;
+};
+
+function addMsg(role, html) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.innerHTML = html;
+  $('chat').appendChild(div);
+  div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+$('askBtn').onclick = async () => {
+  const q = $('question').value.trim();
+  if (!q) return;
+  addMsg('user', esc(q));
+  $('question').value = '';
+  $('askBtn').disabled = true;
+  try {
+    const r = await api('/api/v1/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: q }) });
+    const src = r.sources.map((s, i) => '<span>[' + (i + 1) + '] ' + esc(s.title) + ' · ' + s.score + '</span>').join('');
+    addMsg('bot', esc(r.answer) + (src ? '<div class="sources">引用来源：' + src + '</div>' : '') + '<div class="sources">耗时 ' + r.latency_ms + ' ms</div>');
+  } catch (e) { addMsg('bot', '查询失败：' + esc(e.message)); }
+  $('askBtn').disabled = false;
+};
+$('question').addEventListener('keydown', e => { if (e.key === 'Enter') $('askBtn').click(); });
+
+refreshDocs();
+</script>
+</body>
+</html>

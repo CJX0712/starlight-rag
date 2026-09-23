@@ -1,0 +1,187 @@
+openapi: 3.0.3
+info:
+  title: StarLight-RAG
+  version: 0.1.0
+  description: 端到端 RAG 知识库问答系统 API 契约。作者：晨星
+servers:
+  - url: http://127.0.0.1:8000
+paths:
+  /health:
+    get:
+      summary: 健康检查
+      operationId: health
+      responses:
+        "200":
+          description: 服务正常
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  version: { type: string, example: 0.1.0 }
+                  chunks: { type: integer, example: 12 }
+  /api/v1/documents:
+    post:
+      summary: 导入文档（自动分块索引）
+      operationId: ingestDocument
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IngestRequest" }
+      responses:
+        "201":
+          description: 导入成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IngestResponse" }
+        "422":
+          description: 内容为空或参数非法
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+    get:
+      summary: 文档列表
+      operationId: listDocuments
+      responses:
+        "200":
+          description: 文档列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DocumentInfo" }
+  /api/v1/documents/{doc_id}:
+    delete:
+      summary: 删除文档（三索引同步清理）
+      operationId: deleteDocument
+      parameters:
+        - name: doc_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: 删除成功 }
+        "404":
+          description: 文档不存在
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/v1/query:
+    post:
+      summary: 知识库问答
+      operationId: query
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QueryRequest" }
+      responses:
+        "200":
+          description: 答案与引用来源
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QueryResponse" }
+        "422":
+          description: 问题为空或 top_k 越界
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/v1/evaluate:
+    post:
+      summary: 检索评估（recall@k / MRR，全新管道运行）
+      operationId: evaluate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EvalRequest" }
+      responses:
+        "200":
+          description: 评估指标
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EvalResponse" }
+components:
+  schemas:
+    IngestRequest:
+      type: object
+      required: [title, content]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        content: { type: string, minLength: 1 }
+        doc_id: { type: string, nullable: true }
+        metadata: { type: object, additionalProperties: true }
+    IngestResponse:
+      type: object
+      properties:
+        doc_id: { type: string }
+        title: { type: string }
+        chunks: { type: integer }
+    DocumentInfo:
+      type: object
+      properties:
+        doc_id: { type: string }
+        title: { type: string }
+        chunks: { type: integer }
+        metadata: { type: object, additionalProperties: true }
+    QueryRequest:
+      type: object
+      required: [question]
+      properties:
+        question: { type: string, minLength: 1 }
+        top_k: { type: integer, minimum: 1, maximum: 20, nullable: true }
+    Source:
+      type: object
+      properties:
+        chunk_id: { type: string }
+        doc_id: { type: string }
+        title: { type: string }
+        snippet: { type: string }
+        score: { type: number }
+    QueryResponse:
+      type: object
+      properties:
+        answer: { type: string }
+        sources:
+          type: array
+          items: { $ref: "#/components/schemas/Source" }
+        latency_ms: { type: number }
+    CorpusDoc:
+      type: object
+      required: [title, content]
+      properties:
+        doc_id: { type: string, nullable: true }
+        title: { type: string }
+        content: { type: string }
+    EvalCase:
+      type: object
+      required: [question, expect_doc_id]
+      properties:
+        question: { type: string }
+        expect_doc_id: { type: string }
+    EvalRequest:
+      type: object
+      required: [corpus, cases]
+      properties:
+        corpus:
+          type: array
+          items: { $ref: "#/components/schemas/CorpusDoc" }
+        cases:
+          type: array
+          items: { $ref: "#/components/schemas/EvalCase" }
+        k: { type: integer, default: 5, minimum: 1, maximum: 20 }
+    EvalResponse:
+      type: object
+      properties:
+        cases: { type: integer }
+        recall_at_k: { type: number }
+        mrr: { type: number }
+        details:
+          type: array
+          items: { type: object }
+    ErrorResponse:
+      type: object
+      properties:
+        detail: { type: string }
